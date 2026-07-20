@@ -1,0 +1,14 @@
+{
+  "name": "Bills & Subscriptions Tracker",
+  "short_name": "Bills Tracker",
+  "description": "Track recurring bills and subscriptions with custom columns and icons.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F4F6F9",
+  "theme_color": "#0F1E3D",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
