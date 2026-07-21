@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bills &amp; Subscriptions Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0F1E3D">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F6F9; --surface:#FFFFFF; --surface-alt:#F7F9FC; --border:#E3E8EF;
+    --text:#161B22; --muted:#5B6472; --faint:#8A93A3;
+    --warn:#C6383F; --good:#1F8A5E; --navy:#0F1E3D;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; padding:32px clamp(16px,4vw,64px) 90px; }
+  .mono{ font-family:'JetBrains Mono',monospace; }
+  .disp{ font-family:'Space Grotesk',sans-serif; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  header{ display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap;
+    background:var(--navy); border-radius:18px; padding:28px 32px; margin-bottom:24px; color:#fff;
+    box-shadow:0 12px 30px -12px rgba(15,30,61,0.45); }
+  .brand h1{ font-size:23px; font-weight:600; }
+  .brand .eyebrow{ text-transform:uppercase; font-size:11px; letter-spacing:0.14em; color:#9DB0D6; font-weight:600; margin-bottom:6px; display:block; }
+  .brand p.sub{ color:#B7C3DC; font-size:13px; margin-top:6px; max-width:480px; line-height:1.5; }
+  .total-block{ text-align:right; }
+  .total-block .eyebrow{ text-transform:uppercase; font-size:11px; letter-spacing:0.14em; color:#9DB0D6; font-weight:600; margin-bottom:6px; display:block; }
+  .total-block .amount{ font-size:38px; font-weight:700; color:#fff; }
+  .total-block .amount span{ font-size:18px; color:#9DB0D6; font-weight:500; }
+  .total-block .cycle-tag{ margin-top:6px; font-size:12px; color:#9DB0D6; }
+
+  .toolbar{ display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+  .btn{ border:1px solid var(--border); background:var(--surface); color:var(--text); padding:9px 16px;
+    border-radius:9px; font-size:13px; font-weight:600; display:inline-flex; align-items:center; gap:7px; }
+  .btn:hover{ background:var(--surface-alt); }
+  .btn.primary{ background:var(--navy); color:#fff; border-color:var(--navy); }
+  .btn.primary:hover{ opacity:0.92; }
+  .btn.danger{ color:var(--warn); border-color:#F3D3D3; }
+  .btn svg{ width:15px; height:15px; }
+
+  .kpi-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+  .kpi{ background:var(--surface); border:1px solid var(--border); border-top:3px solid var(--accent,#2E5AAC);
+    border-radius:12px; padding:16px 18px; box-shadow:0 1px 2px rgba(16,24,40,0.04); }
+  .kpi .label{ font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--faint); font-weight:600; }
+  .kpi .value{ font-size:22px; font-weight:600; margin-top:6px; }
+  .kpi .foot{ font-size:11.5px; color:var(--muted); margin-top:5px; }
+  .kpi .foot.warn{ color:var(--warn); font-weight:600; }
+
+  .grid{ display:grid; grid-template-columns:320px 1fr; gap:18px; margin-bottom:18px; }
+  .panel{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px;
+    box-shadow:0 1px 2px rgba(16,24,40,0.04); }
+  .panel-title{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px; }
+  .panel-title h2{ font-size:14.5px; font-weight:700; }
+  .panel-title .note{ font-size:11px; color:var(--faint); }
+
+  .donut-wrap{ position:relative; width:190px; height:190px; margin:4px auto 6px; }
+  .donut-ring{ width:190px; height:190px; border-radius:50%; box-shadow:0 1px 3px rgba(16,24,40,0.08); }
+  .donut-ring::after{ content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:136px; height:136px; border-radius:50%; background:var(--surface); }
+  .donut-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; pointer-events:none; }
+  .donut-center .pct{ font-size:23px; font-weight:700; font-family:'Space Grotesk',sans-serif; }
+  .donut-center .lbl{ font-size:10px; color:var(--muted); margin-top:2px; max-width:90px; line-height:1.3; }
+  .legend{ margin-top:12px; display:flex; flex-direction:column; gap:2px; max-height:220px; overflow-y:auto; }
+  .legend-row{ display:flex; align-items:center; gap:9px; font-size:12px; padding:6px 8px; border-radius:8px; }
+  .legend-row .sw{ width:9px; height:9px; border-radius:2px; flex-shrink:0; }
+  .legend-row .name{ flex:1; font-weight:500; }
+  .legend-row .pct{ color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; }
+  .empty-note{ font-size:12.5px; color:var(--faint); text-align:center; padding:20px 0; }
+
+  table{ width:100%; border-collapse:collapse; }
+  thead th{ text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.07em; color:#fff;
+    font-weight:600; padding:11px 10px; background:var(--navy); white-space:nowrap; }
+  thead tr th:first-child{ border-radius:8px 0 0 8px; }
+  thead tr th:last-child{ border-radius:0 8px 8px 0; }
+  thead th.num{ text-align:right; }
+  tbody td{ padding:12px 10px; font-size:13px; vertical-align:middle; border-bottom:1px solid var(--border); }
+  tbody tr:nth-child(odd){ background:var(--surface-alt); }
+  tbody tr:hover{ background:#EAF0FB; }
+  td.num{ text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--navy); }
+  .name-cell{ display:flex; align-items:center; gap:9px; font-weight:600; }
+  .name-cell .ic{ font-size:16px; }
+  .tag{ display:inline-flex; align-items:center; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .cycle-pill{ display:inline-flex; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:600;
+    background:#EEF1F6; color:var(--muted); border:1px solid var(--border); }
+  .status-pill{ display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:6px;
+    font-size:11px; font-weight:700; }
+  .status-pill.active{ background:#E7F6EF; color:var(--good); }
+  .status-pill.paused{ background:#F1F2F5; color:var(--faint); }
+  .status-pill::before{ content:''; width:5px; height:5px; border-radius:50%; background:currentColor; }
+  .due-badge{ font-size:10.5px; font-family:'JetBrains Mono',monospace; font-weight:600; }
+  .due-badge.soon{ color:var(--warn); }
+  .due-badge.ok{ color:var(--faint); }
+  .row-actions{ display:flex; gap:6px; }
+  .icon-btn{ width:28px; height:28px; border-radius:7px; border:1px solid var(--border); background:var(--surface);
+    display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  .icon-btn:hover{ background:var(--surface-alt); color:var(--text); }
+  .icon-btn svg{ width:14px; height:14px; }
+  tfoot td{ padding:14px 10px 2px; font-size:12px; color:var(--muted); border-top:2px solid var(--navy); font-weight:600; }
+  tfoot td.num{ font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:700; color:var(--navy); }
+
+  .rail-panel{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px 26px 26px;
+    box-shadow:0 1px 2px rgba(16,24,40,0.04); }
+  .rail{ position:relative; height:96px; margin-top:34px; }
+  .rail-line{ position:absolute; top:32px; left:0; right:0; height:3px; background:var(--border); border-radius:2px; }
+  .rail-today{ position:absolute; top:18px; width:2px; height:30px; background:var(--navy); opacity:0.55; }
+  .rail-today-lbl{ position:absolute; top:54px; font-size:10px; color:var(--navy); font-family:'JetBrains Mono',monospace;
+    transform:translateX(-50%); font-weight:700; }
+  .rail-pin{ position:absolute; top:24px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; }
+  .rail-pin .dot{ width:15px; height:15px; border-radius:50%; border:3px solid var(--surface); box-shadow:0 0 0 1.5px var(--border); }
+  .rail-pin .card{ position:absolute; top:-52px; text-align:center; white-space:nowrap; }
+  .rail-pin .card .nm{ font-size:11px; font-weight:700; }
+  .rail-pin .card .dt{ font-size:9.5px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .rail-pin .below{ position:absolute; top:21px; text-align:center; white-space:nowrap; font-size:9.5px;
+    font-family:'JetBrains Mono',monospace; font-weight:700; }
+
+  /* modal */
+  .overlay{ position:fixed; inset:0; background:rgba(15,25,45,0.5); display:none; align-items:center;
+    justify-content:center; z-index:100; padding:20px; }
+  .overlay.show{ display:flex; }
+  .modal{ background:var(--surface); border-radius:16px; padding:26px; width:100%; max-width:440px;
+    max-height:85vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+  .modal h3{ font-size:16px; font-weight:700; margin-bottom:16px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:6px;
+    text-transform:uppercase; letter-spacing:0.04em; }
+  .field input, .field select{ width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px;
+    font-size:13.5px; font-family:inherit; background:var(--surface-alt); color:var(--text); }
+  .field input:focus, .field select:focus{ outline:2px solid #B7C8EE; border-color:#5B8DEF; }
+  .icon-grid{ display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
+  .icon-opt{ font-size:19px; padding:7px 0; border-radius:8px; border:1px solid var(--border); background:var(--surface-alt);
+    text-align:center; }
+  .icon-opt.sel{ border-color:#5B8DEF; background:#EAF0FB; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+  .col-type-row{ display:flex; gap:8px; }
+
+  footer{ margin-top:32px; text-align:center; font-size:11px; color:var(--faint); line-height:1.7; }
+  footer .backup-hint{ color:var(--muted); font-weight:600; }
+
+  @media (max-width:900px){
+    .grid{ grid-template-columns:1fr; }
+    .kpi-row{ grid-template-columns:1fr 1fr; }
+    header{ flex-direction:column; align-items:flex-start; }
+    .total-block{ text-align:left; }
+    table{ display:block; overflow-x:auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="eyebrow">Household ledger</span>
+    <h1 class="disp">Bills &amp; Subscriptions Tracker</h1>
+    <p class="sub">Add your own bills, custom columns and icons — everything saves automatically on this device.</p>
+  </div>
+  <div class="total-block">
+    <span class="eyebrow">Total monthly outlay</span>
+    <div class="amount disp mono" id="totalAmount">₹0.00</div>
+    <div class="cycle-tag mono" id="totalMeta">0 bills</div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <button class="btn primary" id="btnAddBill">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    Add bill
+  </button>
+  <button class="btn" id="btnAddColumn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
+    Add column
+  </button>
+  <button class="btn" id="btnExport">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>
+    Export to Excel
+  </button>
+  <button class="btn" id="btnImport">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M4 5h16"/></svg>
+    Import from Excel
+  </button>
+  <input type="file" id="importFile" accept=".csv,text/csv" style="display:none">
+  <button class="btn" id="btnReset">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    Reset sample data
+  </button>
+</div>
+
+<section class="kpi-row" id="kpiRow"></section>
+
+<section class="grid">
+  <div class="panel">
+    <div class="panel-title"><h2>Spend by category</h2><span class="note" id="donutTotal"></span></div>
+    <div id="donutArea"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title"><h2>All bills</h2><span class="note">Tap a row to edit</span></div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot><tr><td colspan="2">Sum</td><td class="num" id="footSum"></td><td colspan="99"></td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="rail-panel">
+  <div class="panel-title" style="margin-bottom:0;"><h2>Renewal rail — next 30 days</h2><span class="note" id="railRange"></span></div>
+  <div class="rail" id="rail"></div>
+</section>
+
+<footer>
+  <div>Data is stored only on this device. Nothing is uploaded anywhere.</div>
+  <div class="backup-hint">Clearing your browser's cache/site data will erase it — click "Export to Excel" now and then to save a spreadsheet copy you can restore anytime with "Import from Excel".</div>
+</footer>
+
+<!-- Bill modal -->
+<div class="overlay" id="billOverlay">
+  <div class="modal">
+    <h3 id="billModalTitle">Add bill</h3>
+    <div class="field"><label>Icon</label><div class="icon-grid" id="iconGrid"></div></div>
+    <div class="field"><label>Name</label><input type="text" id="fName" placeholder="e.g. Netflix"></div>
+    <div class="field"><label>Category</label><input type="text" id="fCategory" placeholder="e.g. OTT"></div>
+    <div class="field"><label>Owner</label><input type="text" id="fOwner" placeholder="e.g. Ayyappa"></div>
+    <div class="field"><label>Cost (₹)</label><input type="number" id="fCost" placeholder="0"></div>
+    <div class="field"><label>Cycle</label>
+      <select id="fCycle"><option>Monthly</option><option>Weekly</option><option>Yearly</option></select>
+    </div>
+    <div class="field"><label>Renewal date</label><input type="date" id="fDate"></div>
+    <div class="field"><label>Status</label>
+      <select id="fStatus"><option>Active</option><option>Paused</option></select>
+    </div>
+    <div id="customFieldsArea"></div>
+    <div class="modal-actions">
+      <button class="btn danger" id="btnDeleteBill" style="display:none;">Delete</button>
+      <button class="btn" id="btnCancelBill">Cancel</button>
+      <button class="btn primary" id="btnSaveBill">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Column modal -->
+<div class="overlay" id="colOverlay">
+  <div class="modal">
+    <h3>Add custom column</h3>
+    <div class="field"><label>Column name</label><input type="text" id="colName" placeholder="e.g. Payment method"></div>
+    <div class="field"><label>Type</label>
+      <select id="colType"><option value="text">Text</option><option value="number">Number</option><option value="date">Date</option></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelCol">Cancel</button>
+      <button class="btn primary" id="btnSaveCol">Add column</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- storage adapter ----------------
+   Uses Claude's window.storage when previewed inside a Claude artifact.
+   Falls back to plain localStorage when hosted as a real PWA / installed app. */
+const Storage = {
+  useClaude: (typeof window !== 'undefined' && !!window.storage),
+  async get(key){
+    if(this.useClaude){
+      try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; }
+      catch(e){ return null; }
+    }
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : null;
+  },
+  async set(key, value){
+    if(this.useClaude){
+      try{ await window.storage.set(key, JSON.stringify(value)); return; }catch(e){ return; }
+    }
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+};
+
+const K_BILLS = 'bills-tracker:bills';
+const K_COLS = 'bills-tracker:columns';
+
+const ICONS = ['📺','📶','⚡','🔥','📱','🎬','🏠','🚗','🍔','💊','🏋️','📚','✈️','🛒','💳','🏦','🐾','🎮','🧾','☎️','🎵','🧴','🚿','🧹','🛡️','🎓','👶','☕'];
+const PALETTE = ['#2E5AAC','#B9761F','#1F8A5E','#6B5FC7','#C6383F','#0E7C86','#8A5A2B','#A24E8E'];
+const BG_FOR = c => c + '18';
+
+function colorFor(category){
+  let h = 0;
+  for(const ch of (category||'')) h = (h*31 + ch.charCodeAt(0)) % PALETTE.length;
+  return PALETTE[Math.abs(h)];
+}
+
+const DEFAULT_COLUMNS = []; // custom columns beyond the built-in fields
+
+const SAMPLE_BILLS = [
+  { id:'b1', icon:'📺', name:'Netflix', category:'OTT', owner:'Ayyappa', cost:149, cycle:'Monthly', date: addDays(23), status:'Active', custom:{} },
+  { id:'b2', icon:'📶', name:'Jio Fiber', category:'Wifi', owner:'Ayyappa', cost:399, cycle:'Monthly', date: addDays(17), status:'Active', custom:{} },
+  { id:'b3', icon:'📱', name:'Sim Balance', category:'Mobile Recharge', owner:'Ayyappa', cost:239, cycle:'Monthly', date: addDays(4), status:'Active', custom:{} },
+  { id:'b4', icon:'⚡', name:'Electricity', category:'Electricity Bill', owner:'Ayyappa', cost:5463, cycle:'Monthly', date: addDays(14), status:'Active', custom:{} },
+  { id:'b5', icon:'🔥', name:'Gas', category:'Cylinder', owner:'Ayyappa', cost:955, cycle:'Monthly', date: addDays(21), status:'Active', custom:{} },
+];
+
+function addDays(n){
+  const d = new Date(); d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+
+let bills = [];
+let columns = [];
+let editingId = null;
+let selectedIcon = ICONS[0];
+
+async function loadData(){
+  bills = await Storage.get(K_BILLS);
+  columns = await Storage.get(K_COLS);
+  if(!bills){ bills = SAMPLE_BILLS; await Storage.set(K_BILLS, bills); }
+  if(!columns){ columns = DEFAULT_COLUMNS; await Storage.set(K_COLS, columns); }
+}
+async function saveBills(){ await Storage.set(K_BILLS, bills); }
+async function saveColumns(){ await Storage.set(K_COLS, columns); }
+
+function fmtMoney(n){ return '₹' + Number(n||0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtDateDisplay(iso){
+  if(!iso) return '—';
+  const d = new Date(iso+'T00:00:00');
+  return d.toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
+}
+function daysUntil(iso){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(iso+'T00:00:00');
+  return Math.round((d-today)/86400000);
+}
+
+function render(){
+  renderHeader();
+  renderKpis();
+  renderTable();
+  renderDonut();
+  renderRail();
+}
+
+function renderHeader(){
+  const total = bills.reduce((s,b)=>s+Number(b.cost||0),0);
+  document.getElementById('totalAmount').textContent = fmtMoney(total);
+  document.getElementById('totalMeta').textContent = `${bills.length} bill${bills.length!==1?'s':''} tracked`;
+}
+
+function renderKpis(){
+  const total = bills.reduce((s,b)=>s+Number(b.cost||0),0);
+  const active = bills.filter(b=>b.status==='Active');
+  const sorted = bills.slice().sort((a,b)=> daysUntil(a.date)-daysUntil(b.date));
+  const next = sorted[0];
+  const byCost = bills.slice().sort((a,b)=>b.cost-a.cost);
+  const largest = byCost[0];
+  const smallest = byCost[byCost.length-1];
+
+  const kpis = [
+    { accent:'#1F8A5E', label:'Active bills', value: active.length, foot: bills.length ? 'of '+bills.length+' total' : 'No bills yet' },
+    { accent:'#C6383F', label:'Next renewal',
+      value: next ? next.name : '—',
+      foot: next ? (daysUntil(next.date)<=7 ? `Due in ${daysUntil(next.date)}d — ${fmtDateDisplay(next.date)}` : `${fmtDateDisplay(next.date)}`) : '',
+      warn: next && daysUntil(next.date)<=7 },
+    { accent:'#2E5AAC', label:'Largest bill', value: largest ? fmtMoney(largest.cost) : '—',
+      foot: largest ? `${largest.name} — ${total? (largest.cost/total*100).toFixed(1):0}% of spend` : '' },
+    { accent:'#6B5FC7', label:'Smallest bill', value: smallest ? fmtMoney(smallest.cost) : '—',
+      foot: smallest ? `${smallest.name} — ${total? (smallest.cost/total*100).toFixed(1):0}% of spend` : '' },
+  ];
+  document.getElementById('kpiRow').innerHTML = kpis.map(k=>`
+    <div class="kpi" style="--accent:${k.accent}">
+      <div class="label">${k.label}</div>
+      <div class="value disp">${k.value}</div>
+      <div class="foot ${k.warn?'warn':''}">${k.foot}</div>
+    </div>`).join('');
+}
+
+function renderTable(){
+  const head = document.getElementById('tableHead');
+  const cols = ['Name','Category','Owner','Cost','Cycle','Renewal date','Status', ...columns.map(c=>c.name), ''];
+  head.innerHTML = cols.map(c=> c==='Cost' ? `<th class="num">${c}</th>` : `<th>${c}</th>`).join('');
+
+  const body = document.getElementById('tableBody');
+  if(bills.length===0){
+    body.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center; padding:32px; color:var(--faint);">No bills yet — click "Add bill" to get started.</td></tr>`;
+  } else {
+    const sorted = bills.slice().sort((a,b)=> daysUntil(a.date)-daysUntil(b.date));
+    body.innerHTML = sorted.map(b=>{
+      const c = colorFor(b.category);
+      const du = daysUntil(b.date);
+      const customCells = columns.map(col=>{
+        const v = (b.custom && b.custom[col.id]) || '';
+        return `<td>${col.type==='date' && v ? fmtDateDisplay(v) : (v||'—')}</td>`;
+      }).join('');
+      return `
+      <tr data-id="${b.id}">
+        <td><div class="name-cell"><span class="ic">${b.icon||'🧾'}</span>${b.name}</div></td>
+        <td><span class="tag" style="background:${BG_FOR(c)}; color:${c}">${b.category||'—'}</span></td>
+        <td style="color:var(--muted)">${b.owner||'—'}</td>
+        <td class="num">${fmtMoney(b.cost)}</td>
+        <td><span class="cycle-pill">${b.cycle}</span></td>
+        <td style="color:var(--muted)">${fmtDateDisplay(b.date)}</td>
+        <td>
+          <span class="status-pill ${b.status==='Active'?'active':'paused'}">${b.status}</span>
+          ${b.status==='Active' ? `<div class="due-badge ${du<=7?'soon':'ok'}">${du<0 ? 'overdue' : (du<=7? 'due in '+du+'d' : 'in '+du+' days')}</div>` : ''}
+        </td>
+        ${customCells}
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn editBtn" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+            <button class="icon-btn deleteBtn" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('footSum').textContent = fmtMoney(bills.reduce((s,b)=>s+Number(b.cost||0),0));
+
+  body.querySelectorAll('.editBtn').forEach(btn=>{
+    btn.addEventListener('click', e=>{ openBillModal(e.target.closest('tr').dataset.id); });
+  });
+  body.querySelectorAll('.deleteBtn').forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      const id = e.target.closest('tr').dataset.id;
+      if(confirm('Delete this bill?')){
+        bills = bills.filter(b=>b.id!==id);
+        await saveBills();
+        render();
+      }
+    });
+  });
+}
+
+function renderDonut(){
+  const cats = {};
+  bills.forEach(b=>{ cats[b.category||'Uncategorized'] = (cats[b.category||'Uncategorized']||0) + Number(b.cost||0); });
+  const total = bills.reduce((s,b)=>s+Number(b.cost||0),0);
+  const entries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('donutTotal').textContent = fmtMoney(total) + ' total';
+
+  const area = document.getElementById('donutArea');
+  if(entries.length===0){
+    area.innerHTML = `<div class="empty-note">Add a bill to see the breakdown</div>`;
+    return;
+  }
+  const top = entries[0];
+  let acc = 0;
+  const stops = entries.map(([name,val])=>{
+    const s0 = (acc/total)*100; acc += val; const s1 = (acc/total)*100;
+    return `${colorFor(name)} ${s0}% ${s1}%`;
+  }).join(', ');
+
+  area.innerHTML = `
+    <div class="donut-wrap">
+      <div class="donut-ring" style="background:conic-gradient(${stops})"></div>
+      <div class="donut-center">
+        <div class="pct disp">${total? (top[1]/total*100).toFixed(1):0}%</div>
+        <div class="lbl">of spend is ${top[0]}</div>
+      </div>
+    </div>
+    <div class="legend">
+      ${entries.map(([name,val])=>`
+        <div class="legend-row" style="background:${BG_FOR(colorFor(name))}">
+          <span class="sw" style="background:${colorFor(name)}"></span>
+          <span class="name">${name}</span>
+          <span class="pct">${total? (val/total*100).toFixed(1):0}%</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderRail(){
+  const rail = document.getElementById('rail');
+  rail.innerHTML = '';
+  const start = new Date(); start.setHours(0,0,0,0);
+  const end = new Date(start); end.setDate(end.getDate()+30);
+  document.getElementById('railRange').textContent = `${start.toLocaleDateString('en-IN',{day:'numeric',month:'short'})} → ${end.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}`;
+
+  const upcoming = bills.filter(b=>{
+    const d = new Date(b.date+'T00:00:00');
+    return d >= start && d <= end;
+  }).sort((a,b)=> new Date(a.date)-new Date(b.date));
+
+  const line = document.createElement('div'); line.className='rail-line'; rail.appendChild(line);
+  const span = end-start;
+  const pctFor = iso => { const d = new Date(iso+'T00:00:00'); return Math.max(2, Math.min(98, ((d-start)/span)*100)); };
+
+  const todayPct = 2;
+  const todayEl = document.createElement('div'); todayEl.className='rail-today'; todayEl.style.left=todayPct+'%'; rail.appendChild(todayEl);
+  const todayLbl = document.createElement('div'); todayLbl.className='rail-today-lbl'; todayLbl.style.left=todayPct+'%'; todayLbl.textContent='TODAY'; rail.appendChild(todayLbl);
+
+  if(upcoming.length===0){
+    const note = document.createElement('div');
+    note.className='empty-note'; note.style.position='absolute'; note.style.top='0'; note.style.width='100%';
+    note.textContent = 'No renewals in the next 30 days';
+    rail.appendChild(note);
+    return;
+  }
+
+  upcoming.forEach((b,i)=>{
+    const p = pctFor(b.date);
+    const c = colorFor(b.category);
+    const pin = document.createElement('div');
+    pin.className='rail-pin'; pin.style.left=p+'%';
+    const flip = i%2===0;
+    pin.innerHTML = `
+      ${flip ? `<div class="card"><div class="nm">${b.icon} ${b.name}</div><div class="dt">${fmtDateDisplay(b.date).replace(/, \d{4}/,'')}</div></div>` : ''}
+      <div class="dot" style="background:${c}"></div>
+      ${!flip ? `<div class="below" style="color:${c}">${b.icon} ${b.name}</div>` : ''}
+    `;
+    rail.appendChild(pin);
+  });
+}
+
+/* ---------------- Bill modal ---------------- */
+function buildIconGrid(){
+  const grid = document.getElementById('iconGrid');
+  grid.innerHTML = ICONS.map(ic=>`<div class="icon-opt ${ic===selectedIcon?'sel':''}" data-ic="${ic}">${ic}</div>`).join('');
+  grid.querySelectorAll('.icon-opt').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      selectedIcon = el.dataset.ic;
+      grid.querySelectorAll('.icon-opt').forEach(x=>x.classList.remove('sel'));
+      el.classList.add('sel');
+    });
+  });
+}
+
+function buildCustomFields(existing){
+  const area = document.getElementById('customFieldsArea');
+  if(columns.length===0){ area.innerHTML=''; return; }
+  area.innerHTML = columns.map(col=>{
+    const val = (existing && existing.custom && existing.custom[col.id]) || '';
+    const type = col.type==='number' ? 'number' : (col.type==='date' ? 'date' : 'text');
+    return `<div class="field"><label>${col.name}</label><input type="${type}" class="customInput" data-col="${col.id}" value="${val}"></div>`;
+  }).join('');
+}
+
+function openBillModal(id){
+  editingId = id || null;
+  const bill = id ? bills.find(b=>b.id===id) : null;
+  document.getElementById('billModalTitle').textContent = bill ? 'Edit bill' : 'Add bill';
+  document.getElementById('btnDeleteBill').style.display = bill ? 'inline-flex' : 'none';
+  selectedIcon = bill ? bill.icon : ICONS[0];
+  buildIconGrid();
+  document.getElementById('fName').value = bill ? bill.name : '';
+  document.getElementById('fCategory').value = bill ? bill.category : '';
+  document.getElementById('fOwner').value = bill ? bill.owner : '';
+  document.getElementById('fCost').value = bill ? bill.cost : '';
+  document.getElementById('fCycle').value = bill ? bill.cycle : 'Monthly';
+  document.getElementById('fDate').value = bill ? bill.date : addDays(7);
+  document.getElementById('fStatus').value = bill ? bill.status : 'Active';
+  buildCustomFields(bill);
+  document.getElementById('billOverlay').classList.add('show');
+}
+function closeBillModal(){ document.getElementById('billOverlay').classList.remove('show'); }
+
+async function saveBill(){
+  const name = document.getElementById('fName').value.trim();
+  if(!name){ alert('Please enter a name.'); return; }
+  const custom = {};
+  document.querySelectorAll('.customInput').forEach(inp=>{ custom[inp.dataset.col] = inp.value; });
+
+  const data = {
+    id: editingId || ('b'+Date.now()),
+    icon: selectedIcon,
+    name,
+    category: document.getElementById('fCategory').value.trim() || 'Uncategorized',
+    owner: document.getElementById('fOwner').value.trim(),
+    cost: parseFloat(document.getElementById('fCost').value) || 0,
+    cycle: document.getElementById('fCycle').value,
+    date: document.getElementById('fDate').value || addDays(7),
+    status: document.getElementById('fStatus').value,
+    custom
+  };
+
+  if(editingId){
+    bills = bills.map(b=> b.id===editingId ? data : b);
+  } else {
+    bills.push(data);
+  }
+  await saveBills();
+  closeBillModal();
+  render();
+}
+
+/* ---------------- Column modal ---------------- */
+function openColModal(){ document.getElementById('colOverlay').classList.add('show'); document.getElementById('colName').value=''; }
+function closeColModal(){ document.getElementById('colOverlay').classList.remove('show'); }
+async function saveColumn(){
+  const name = document.getElementById('colName').value.trim();
+  if(!name){ alert('Please enter a column name.'); return; }
+  const type = document.getElementById('colType').value;
+  columns.push({ id:'c'+Date.now(), name, type });
+  await saveColumns();
+  closeColModal();
+  render();
+}
+
+/* ---------------- Export / Import backup (Excel/CSV format) ---------------- */
+function csvEscape(val){
+  const s = String(val ?? '');
+  if(s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')){
+    return '"' + s.replace(/"/g,'""') + '"';
+  }
+  return s;
+}
+
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; }
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if(c === '\r'){ /* skip, \n handles the line break */ }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length===1 && r[0].trim()===''));
+}
+
+const FIXED_HEADERS = ['Icon','Name','Category','Owner','Cost','Cycle','Renewal Date','Status'];
+
+document.getElementById('btnExport').addEventListener('click', ()=>{
+  const customNames = columns.map(c=>c.name);
+  const header = [...FIXED_HEADERS, ...customNames];
+  const rows = bills.map(b=>{
+    const base = [b.icon, b.name, b.category, b.owner, b.cost, b.cycle, b.date, b.status];
+    const customVals = columns.map(col => (b.custom && b.custom[col.id]) || '');
+    return [...base, ...customVals].map(csvEscape).join(',');
+  });
+  const csv = [header.map(csvEscape).join(','), ...rows].join('\r\n');
+  // Leading \uFEFF (byte-order mark) makes Excel correctly detect UTF-8 characters like ₹ and emoji icons.
+  const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'bills-tracker-backup.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btnImport').addEventListener('click', ()=>{
+  document.getElementById('importFile').click();
+});
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev)=>{
+    try{
+      const text = ev.target.result.replace(/^\uFEFF/, '');
+      const rows = parseCSV(text);
+      if(rows.length < 1) throw new Error('Empty file');
+      const header = rows[0].map(h=>h.trim());
+      const customHeaders = header.filter(h => !FIXED_HEADERS.includes(h));
+
+      customHeaders.forEach(h=>{
+        if(!columns.find(c=>c.name===h)){
+          columns.push({ id:'c'+Date.now()+Math.random().toString(36).slice(2,6), name:h, type:'text' });
+        }
+      });
+
+      const dataRows = rows.slice(1).filter(r => r.some(cell => cell.trim() !== ''));
+      const newBills = dataRows.map(r=>{
+        const obj = {};
+        header.forEach((h,idx)=>{ obj[h] = (r[idx] ?? '').trim(); });
+        const custom = {};
+        customHeaders.forEach(h=>{
+          const col = columns.find(c=>c.name===h);
+          custom[col.id] = obj[h] || '';
+        });
+        return {
+          id: 'b'+Date.now()+Math.random().toString(36).slice(2,6),
+          icon: obj['Icon'] || '🧾',
+          name: obj['Name'] || 'Untitled',
+          category: obj['Category'] || 'Uncategorized',
+          owner: obj['Owner'] || '',
+          cost: parseFloat(obj['Cost']) || 0,
+          cycle: obj['Cycle'] || 'Monthly',
+          date: obj['Renewal Date'] || addDays(7),
+          status: obj['Status'] || 'Active',
+          custom
+        };
+      });
+
+      if(newBills.length === 0) throw new Error('No rows found');
+      bills = newBills;
+      await saveBills();
+      await saveColumns();
+      render();
+      alert('Backup restored successfully from Excel/CSV file.');
+    }catch(err){
+      alert("Could not read this file — make sure it's a .csv backup exported from this tracker (or an Excel file saved as CSV).");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+/* ---------------- wire up ---------------- */
+document.getElementById('btnAddBill').addEventListener('click', ()=>openBillModal(null));
+document.getElementById('btnCancelBill').addEventListener('click', closeBillModal);
+document.getElementById('btnSaveBill').addEventListener('click', saveBill);
+document.getElementById('btnDeleteBill').addEventListener('click', async ()=>{
+  if(editingId && confirm('Delete this bill?')){
+    bills = bills.filter(b=>b.id!==editingId);
+    await saveBills();
+    closeBillModal();
+    render();
+  }
+});
+document.getElementById('btnAddColumn').addEventListener('click', openColModal);
+document.getElementById('btnCancelCol').addEventListener('click', closeColModal);
+document.getElementById('btnSaveCol').addEventListener('click', saveColumn);
+document.getElementById('btnReset').addEventListener('click', async ()=>{
+  if(confirm('Reset to the original 5 sample bills? Your custom columns will stay.')){
+    bills = SAMPLE_BILLS.map(b=>({...b, date: b.date}));
+    await saveBills();
+    render();
+  }
+});
+[document.getElementById('billOverlay'), document.getElementById('colOverlay')].forEach(ov=>{
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.classList.remove('show'); });
+});
+
+/* ---------------- boot ---------------- */
+(async function init(){
+  await loadData();
+  render();
+  if('serviceWorker' in navigator && location.protocol !== 'about:' && !Storage.useClaude){
+    try{ navigator.serviceWorker.register('service-worker.js'); }catch(e){}
+  }
+})();
+</script>
+</body>
+</html>
