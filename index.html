@@ -139,7 +139,8 @@
   .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
   .col-type-row{ display:flex; gap:8px; }
 
-  footer{ margin-top:32px; text-align:center; font-size:11px; color:var(--faint); }
+  footer{ margin-top:32px; text-align:center; font-size:11px; color:var(--faint); line-height:1.7; }
+  footer .backup-hint{ color:var(--muted); font-weight:600; }
 
   @media (max-width:900px){
     .grid{ grid-template-columns:1fr; }
@@ -174,6 +175,15 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
     Add column
   </button>
+  <button class="btn" id="btnExport">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>
+    Export backup
+  </button>
+  <button class="btn" id="btnImport">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M4 5h16"/></svg>
+    Import backup
+  </button>
+  <input type="file" id="importFile" accept="application/json" style="display:none">
   <button class="btn" id="btnReset">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
     Reset sample data
@@ -204,7 +214,10 @@
   <div class="rail" id="rail"></div>
 </section>
 
-<footer>Data is stored only on this device. Nothing is uploaded anywhere.</footer>
+<footer>
+  <div>Data is stored only on this device. Nothing is uploaded anywhere.</div>
+  <div class="backup-hint">Clearing your browser's cache/site data will erase it — click "Export backup" now and then to save a copy you can restore anytime with "Import backup".</div>
+</footer>
 
 <!-- Bill modal -->
 <div class="overlay" id="billOverlay">
@@ -583,6 +596,40 @@ async function saveColumn(){
   closeColModal();
   render();
 }
+
+/* ---------------- Export / Import backup ---------------- */
+document.getElementById('btnExport').addEventListener('click', ()=>{
+  const data = { bills, columns, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'bills-tracker-backup.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btnImport').addEventListener('click', ()=>{
+  document.getElementById('importFile').click();
+});
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev)=>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      if(data.bills){ bills = data.bills; await saveBills(); }
+      if(data.columns){ columns = data.columns; await saveColumns(); }
+      render();
+      alert('Backup restored successfully.');
+    }catch(err){
+      alert("Could not read this file — make sure it's a backup exported from this tracker.");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
 
 /* ---------------- wire up ---------------- */
 document.getElementById('btnAddBill').addEventListener('click', ()=>openBillModal(null));
