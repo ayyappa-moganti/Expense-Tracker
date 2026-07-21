@@ -177,13 +177,13 @@
   </button>
   <button class="btn" id="btnExport">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>
-    Export backup
+    Export to Excel
   </button>
   <button class="btn" id="btnImport">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M4 5h16"/></svg>
-    Import backup
+    Import from Excel
   </button>
-  <input type="file" id="importFile" accept="application/json" style="display:none">
+  <input type="file" id="importFile" accept=".csv,text/csv" style="display:none">
   <button class="btn" id="btnReset">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
     Reset sample data
@@ -216,7 +216,7 @@
 
 <footer>
   <div>Data is stored only on this device. Nothing is uploaded anywhere.</div>
-  <div class="backup-hint">Clearing your browser's cache/site data will erase it — click "Export backup" now and then to save a copy you can restore anytime with "Import backup".</div>
+  <div class="backup-hint">Clearing your browser's cache/site data will erase it — click "Export to Excel" now and then to save a spreadsheet copy you can restore anytime with "Import from Excel".</div>
 </footer>
 
 <!-- Bill modal -->
@@ -597,14 +597,53 @@ async function saveColumn(){
   render();
 }
 
-/* ---------------- Export / Import backup ---------------- */
+/* ---------------- Export / Import backup (Excel/CSV format) ---------------- */
+function csvEscape(val){
+  const s = String(val ?? '');
+  if(s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')){
+    return '"' + s.replace(/"/g,'""') + '"';
+  }
+  return s;
+}
+
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; }
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if(c === '\r'){ /* skip, \n handles the line break */ }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length===1 && r[0].trim()===''));
+}
+
+const FIXED_HEADERS = ['Icon','Name','Category','Owner','Cost','Cycle','Renewal Date','Status'];
+
 document.getElementById('btnExport').addEventListener('click', ()=>{
-  const data = { bills, columns, exportedAt: new Date().toISOString() };
-  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const customNames = columns.map(c=>c.name);
+  const header = [...FIXED_HEADERS, ...customNames];
+  const rows = bills.map(b=>{
+    const base = [b.icon, b.name, b.category, b.owner, b.cost, b.cycle, b.date, b.status];
+    const customVals = columns.map(col => (b.custom && b.custom[col.id]) || '');
+    return [...base, ...customVals].map(csvEscape).join(',');
+  });
+  const csv = [header.map(csvEscape).join(','), ...rows].join('\r\n');
+  // Leading \uFEFF (byte-order mark) makes Excel correctly detect UTF-8 characters like ₹ and emoji icons.
+  const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'bills-tracker-backup.json';
+  a.download = 'bills-tracker-backup.csv';
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -618,13 +657,49 @@ document.getElementById('importFile').addEventListener('change', (e)=>{
   const reader = new FileReader();
   reader.onload = async (ev)=>{
     try{
-      const data = JSON.parse(ev.target.result);
-      if(data.bills){ bills = data.bills; await saveBills(); }
-      if(data.columns){ columns = data.columns; await saveColumns(); }
+      const text = ev.target.result.replace(/^\uFEFF/, '');
+      const rows = parseCSV(text);
+      if(rows.length < 1) throw new Error('Empty file');
+      const header = rows[0].map(h=>h.trim());
+      const customHeaders = header.filter(h => !FIXED_HEADERS.includes(h));
+
+      customHeaders.forEach(h=>{
+        if(!columns.find(c=>c.name===h)){
+          columns.push({ id:'c'+Date.now()+Math.random().toString(36).slice(2,6), name:h, type:'text' });
+        }
+      });
+
+      const dataRows = rows.slice(1).filter(r => r.some(cell => cell.trim() !== ''));
+      const newBills = dataRows.map(r=>{
+        const obj = {};
+        header.forEach((h,idx)=>{ obj[h] = (r[idx] ?? '').trim(); });
+        const custom = {};
+        customHeaders.forEach(h=>{
+          const col = columns.find(c=>c.name===h);
+          custom[col.id] = obj[h] || '';
+        });
+        return {
+          id: 'b'+Date.now()+Math.random().toString(36).slice(2,6),
+          icon: obj['Icon'] || '🧾',
+          name: obj['Name'] || 'Untitled',
+          category: obj['Category'] || 'Uncategorized',
+          owner: obj['Owner'] || '',
+          cost: parseFloat(obj['Cost']) || 0,
+          cycle: obj['Cycle'] || 'Monthly',
+          date: obj['Renewal Date'] || addDays(7),
+          status: obj['Status'] || 'Active',
+          custom
+        };
+      });
+
+      if(newBills.length === 0) throw new Error('No rows found');
+      bills = newBills;
+      await saveBills();
+      await saveColumns();
       render();
-      alert('Backup restored successfully.');
+      alert('Backup restored successfully from Excel/CSV file.');
     }catch(err){
-      alert("Could not read this file — make sure it's a backup exported from this tracker.");
+      alert("Could not read this file — make sure it's a .csv backup exported from this tracker (or an Excel file saved as CSV).");
     }
   };
   reader.readAsText(file);
